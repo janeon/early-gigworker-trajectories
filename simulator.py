@@ -1,63 +1,14 @@
-import torch
-from torch import nn
-from torch.distributions import Binomial, Poisson
+# import torch
+# from torch import nn
+# from torch.distributions import Binomial, Poisson
 from scipy.stats import binom, poisson
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-
-# m = Poisson(torch.tensor([4]))
-# print(m.sample())
-lamb = 3 # let's say that on average, FLs drop off around this #
-bids = 5
-p = 0.6
+import pandas
 
 # Given lambda (Poisson) for bids, p (binomial) offers per bid *as model parameters*
 # Using PyTorch operations, sample number of bids, sample number of offers from each bid
 # Up to here, this is how we would generate data, AND ALSO how we would write the beginning part of the model
-
-# Constructing binomial probabilities without account for dropoffss
-b_pmfs =  [ [ binom.pmf(row, col, p) for col in range(bids) ] for row in range(bids) ]
-b_pmfs = np.array(b_pmfs)
-
-# using the poisson to extract expected dropoff rate at each bid
-p_x = np.arange(1, bids+1, 1)
-p_y = poisson.pmf(p_x, lamb)
-# plt.plot(p_x, p_y)
-# plt.show()
-# print(p_x, p_y)
-drop_offs = [0, p_y[0]]
-for y in p_y[1:-1]:
-    drop_offs.append(y*drop_offs[-1])
-
-print("drop_offs", drop_offs)
-print("b_pmfs", b_pmfs)
-
-# applying dropoff rates to each bid column
-scaled_pmfs = [drop_offs[col]*b_pmfs[:,col] for col in range(bids)]
-scaled_pmfs = np.column_stack(scaled_pmfs)
-print("scaled_pmfs", scaled_pmfs)
-
-# finding column-wise cumulative sum for computing probabilities later
-cml_drop_offs = np.cumsum(np.array(drop_offs))
-cml_pmfs = np.cumsum(scaled_pmfs, axis=1)
-print("cml_drop_offs", cml_drop_offs)
-print("cml_pmfs", cml_pmfs)
-
-# constructing probabilities accounting for drop-off rates
-final_probabilies = b_pmfs[:,:2] # start off with first two columns
-# note that the first bid isn't scaled at all because here we don't account for
-# freelancers who drop off after 0th bid (those who register but don't bid at all)
-for i in range(1, bids-1):
-    # constructing column i+1
-    rate = cml_drop_offs[i] # cumulative dropoff rate of previous column
-    cml_prev_col = cml_pmfs[:,i] # cumulative sum of previous column(s)
-    curr_scale = 1-rate # weight given to current column is 1 - previous drop offs
-    curr_column = curr_scale*b_pmfs[:, i+1]  + cml_prev_col # give appropriate weights to previous columns based on dropoff
-    final_probabilies = np.column_stack((final_probabilies, curr_column))
-print("\nPROBABILITIES WHERE ROWS=OFFERS & COLUMNS=BIDS")
-print(final_probabilies, "\n")
-
 
 # ... want to get "probability of k bids, j offers" out of model
 #   can we get p(b bids, o offers | lambda, p) as a number for each b, o?
@@ -66,6 +17,69 @@ print(final_probabilies, "\n")
 #   assuming that when you sample from this distribution you're just uniformly drawing from the dataset?
 #   Potentially look at https://dfdazac.github.io/sinkhorn.html
 
+def main():
+    lamb = 5  #  on average, FLs drop off around lambda
+    bids = 10  # maximal number of bids
+    p = 0.6 # global bid-winning probability 
+    b_pmfs, drop_offs = initial_probabilities(bids, p, lamb)
+    cml_drop_offs, cml_pmfs = apply_drop_offs(b_pmfs, drop_offs, bids)
+    final_probabilies = construct_probs_matrix(b_pmfs, cml_pmfs, cml_drop_offs, bids)
+    row_labels = [str(i)+" offers" for i in range(bids)]
+    col_labels = [str(i)+ " bids" for i in range(bids)]
+    # print("\nPROBABILITIES WHERE ROWS=OFFERS & COLUMNS=BIDS")
+    df = pandas.DataFrame(final_probabilies, columns=col_labels, index=row_labels)
+    print(df, "\n")
+
+def initial_probabilities(bids, p, lamb):
+    # Constructing binomial probabilities without account for dropoffss
+    b_pmfs =  [ [ binom.pmf(row, col, p) for col in range(bids) ] for row in range(bids) ]
+    b_pmfs = np.array(b_pmfs)
+
+    # using the poisson to extract expected dropoff rate at each bid
+    p_x = np.arange(1, bids+1, 1)
+    p_y = poisson.pmf(p_x, lamb)
+    # plt.plot(p_x, p_y)
+    # plt.show()
+    # print(p_x, p_y)
+    drop_offs = [0, p_y[0]]
+    for y in p_y[1:-1]:
+        drop_offs.append(y*drop_offs[-1])
+    # print("drop_offs", drop_offs)
+    # print("b_pmfs", b_pmfs)
+    return b_pmfs, drop_offs
+
+def apply_drop_offs(b_pmfs, drop_offs, bids):
+    # applying dropoff rates to each bid column
+    scaled_pmfs = [drop_offs[col]*b_pmfs[:,col] for col in range(bids)]
+    scaled_pmfs = np.column_stack(scaled_pmfs)
+    # print("scaled_pmfs", scaled_pmfs)
+
+    # finding column-wise cumulative sum for computing probabilities later
+    cml_drop_offs = np.cumsum(np.array(drop_offs))
+    cml_pmfs = np.cumsum(scaled_pmfs, axis=1)
+    # print("cml_drop_offs", cml_drop_offs)
+    # print("cml_pmfs", cml_pmfs)
+    return cml_drop_offs, cml_pmfs
+
+def construct_probs_matrix(b_pmfs, cml_pmfs, cml_drop_offs, bids):
+    # constructing probabilities accounting for drop-off rates
+    final_probabilies = b_pmfs[:,:2] # start off with first two columns
+    # note that the first bid isn't scaled at all because here we don't account for
+    # freelancers who drop off after 0th bid (those who register but don't bid at all)
+    for i in range(1, bids-1):
+        # constructing column i+1
+        rate = cml_drop_offs[i] # cumulative dropoff rate of previous column
+        cml_prev_col = cml_pmfs[:,i] # cumulative sum of previous column(s)
+        curr_scale = 1-rate # weight given to current column is 1 - previous drop offs
+        curr_column = curr_scale*b_pmfs[:, i+1]  + cml_prev_col # give appropriate weights to previous columns based on dropoff
+        final_probabilies = np.column_stack((final_probabilies, curr_column))
+    return np.around(final_probabilies, decimals=2) # round off to two places for viewing
+
+if __name__ == "__main__":
+    main()
+
+# m = Poisson(torch.tensor([4]))
+# print(m.sample())
 
 # x = torch.distributions.Binomial(total_count=100, probs=p)
 # print(x.sample())
