@@ -18,17 +18,21 @@ import pandas
 #   Potentially look at https://dfdazac.github.io/sinkhorn.html
 
 def main():
-    lamb = 5  #  on average, FLs drop off around lambda
-    bids = 10  # maximal number of bids
+    lamb = 3  #  on average, FLs drop off around lambda
+    bids = 6  # maximal number of bids, minus 1
     p = 0.6 # global bid-winning probability 
     b_pmfs, drop_offs = initial_probabilities(bids, p, lamb)
+    # print(drop_offs)
     cml_drop_offs, cml_pmfs = apply_drop_offs(b_pmfs, drop_offs, bids)
     final_probabilies = construct_probs_matrix(b_pmfs, cml_pmfs, cml_drop_offs, bids)
-    row_labels = [str(i)+" offers" for i in range(bids)]
-    col_labels = [str(i)+ " bids" for i in range(bids)]
+    printable = np.vstack([final_probabilies, drop_offs])
+    print(printable)
+    row_labels = [str(i)+" offers" for i in range(bids)] + ["Drop off rate"]
+    col_labels = [str(i)+ " bids" for i in range(bids)] 
     # print("\nPROBABILITIES WHERE ROWS=OFFERS & COLUMNS=BIDS")
-    df = pandas.DataFrame(final_probabilies, columns=col_labels, index=row_labels)
-    print(df, "\n")
+    df = pandas.DataFrame(printable, columns=col_labels, index=row_labels)
+     # round off to two places for viewing
+    print(df.round(2), "\n")
 
 def initial_probabilities(bids, p, lamb):
     # Constructing binomial probabilities without account for dropoffss
@@ -40,10 +44,10 @@ def initial_probabilities(bids, p, lamb):
     p_y = poisson.pmf(p_x, lamb)
     # plt.plot(p_x, p_y)
     # plt.show()
-    # print(p_x, p_y)
-    drop_offs = [0, p_y[0]]
-    for y in p_y[1:-1]:
-        drop_offs.append(y*drop_offs[-1])
+    drop_offs = [0]
+    drop_offs.extend(np.asarray(p_y[:-1]))
+    # for y in p_y[1:-1]:
+    #     drop_offs.append(y*drop_offs[-1])
     # print("drop_offs", drop_offs)
     # print("b_pmfs", b_pmfs)
     return b_pmfs, drop_offs
@@ -73,7 +77,7 @@ def construct_probs_matrix(b_pmfs, cml_pmfs, cml_drop_offs, bids):
         curr_scale = 1-rate # weight given to current column is 1 - previous drop offs
         curr_column = curr_scale*b_pmfs[:, i+1]  + cml_prev_col # give appropriate weights to previous columns based on dropoff
         final_probabilies = np.column_stack((final_probabilies, curr_column))
-    return np.around(final_probabilies, decimals=2) # round off to two places for viewing
+    return final_probabilies
 
 if __name__ == "__main__":
     main()
