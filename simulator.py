@@ -26,13 +26,13 @@ def main():
     cml_drop_offs, cml_pmfs = apply_drop_offs(b_pmfs, drop_offs, bids)
     final_probabilies = construct_probs_matrix(b_pmfs, cml_pmfs, cml_drop_offs, bids)
     printable = np.vstack([final_probabilies, drop_offs])
-    print(printable)
+    # print(printable)
     row_labels = [str(i)+" offers" for i in range(bids)] + ["Drop off rate"]
     col_labels = [str(i)+ " bids" for i in range(bids)] 
     # print("\nPROBABILITIES WHERE ROWS=OFFERS & COLUMNS=BIDS")
     df = pandas.DataFrame(printable, columns=col_labels, index=row_labels)
      # round off to two places for viewing
-    print(df.round(2), "\n")
+    print(df.round(3), "\n")
 
 def initial_probabilities(bids, p, lamb):
     # Constructing binomial probabilities without account for dropoffss
@@ -72,10 +72,11 @@ def construct_probs_matrix(b_pmfs, cml_pmfs, cml_drop_offs, bids):
     # freelancers who drop off after 0th bid (those who register but don't bid at all)
     for i in range(1, bids-1):
         # constructing column i+1
-        rate = cml_drop_offs[i] # cumulative dropoff rate of previous column
-        cml_prev_col = cml_pmfs[:,i] # cumulative sum of previous column(s)
-        curr_scale = 1-rate # weight given to current column is 1 - previous drop offs
-        curr_column = curr_scale*b_pmfs[:, i+1]  + cml_prev_col # give appropriate weights to previous columns based on dropoff
+        prev_column = final_probabilies[:,-1:]
+        rate = cml_drop_offs[i] # cumulative dropoff rate up to prev col = rate for current col = # of FLs left
+        prev_weight = 1-rate  # rate given to previous column
+        base_column = b_pmfs[:,i+1:i+2] # i+1th column of the binomial matrix
+        curr_column = prev_weight*prev_column  + rate*base_column # assign weights to both columns
         final_probabilies = np.column_stack((final_probabilies, curr_column))
     return final_probabilies
 
