@@ -1,7 +1,7 @@
 # early-gigworker-trajectories
 
 
-- [ X ] Create simulator predicting dropoff rates given 
+- [X] Create simulator predicting dropoff rates given 
   -  labmda, the expected number of bids after which freelancers dropoff
   -  total number of bids
   -  the global probability of winning a bid
