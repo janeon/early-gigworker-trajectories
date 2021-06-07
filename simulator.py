@@ -16,6 +16,7 @@ import pandas
 #   If not, do we basically need to sample it lots of times and then say our resulting "dataset" is our "distribution",
 #   assuming that when you sample from this distribution you're just uniformly drawing from the dataset?
 #   Potentially look at https://dfdazac.github.io/sinkhorn.html
+#   https://www.stat.cmu.edu/~larry/=sml/Opt.pdf
 
 def main():
     lamb = 3  #  on average, FLs drop off around lambda
@@ -86,6 +87,7 @@ if __name__ == "__main__":
 # m = Poisson(torch.tensor([4]))
 # print(m.sample())
 
+# beta distributions: https://en.wikipedia.org/wiki/Beta_distribution
 # x = torch.distributions.Binomial(total_count=100, probs=p)
 # print(x.sample())
 
